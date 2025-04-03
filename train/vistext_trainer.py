@@ -87,6 +87,8 @@ class VistextTrainer(Trainer):
                 texts = inputs.pop('texts')
                 data_ids = inputs.pop('data_ids')
                 # inputs.pop("images")
+                # inputs.pop("spectrograms")
+                # inputs["input_ids"] = labels[:, :1]
                 inputs["input_ids"] = labels[:, :4]
 
                 output = self.model.generate(generation_config=generation_config, **inputs).cpu()
@@ -103,6 +105,8 @@ class VistextTrainer(Trainer):
                 texts = inputs.pop('texts')
                 data_ids = inputs.pop('data_ids')
                 # inputs.pop("images")
+                # inputs.pop("spectrograms")
+                # inputs["input_ids"] = labels[:, :1]
                 inputs["input_ids"] = labels[:, :4]
 
                 output = self.model.generate(generation_config=generation_config, **inputs).cpu()

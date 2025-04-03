@@ -17,7 +17,7 @@ import random
 import torch.distributed as dist
 
 from transformers import GenerationConfig
-from model import DonutWhisper, DonutWhisperAttn, WhisperOnly
+from model import DonutWhisper, DonutWhisperAttn, WhisperOnly, DonutOnly
 from dataset.vistext_dataset import VistextDataset, VistextDataCollator
 from train.vistext_trainer import VistextTrainer
 
@@ -62,12 +62,18 @@ def train():
         model = DonutWhisperAttn(whisper_model=whisper_model, image_model_path=training_args.image_model_path).to(torch.float16)
     elif training_args.model_type == "whisper_only":
         model = WhisperOnly(whisper_model=whisper_model).to(torch.float16)
+    elif training_args.model_type == "donut_only":
+        model = DonutOnly(image_model_path=training_args.image_model_path).to(torch.float16)
     else:
         raise NotImplementedError
 
+
     image_processor = DonutProcessor.from_pretrained(training_args.image_model_path)
     wav_processor = WhisperFeatureExtractor.from_pretrained(training_args.whisper_path)
-    tokenizer = WhisperTokenizer.from_pretrained(training_args.whisper_path, multilingual=False, language="en", task='transcribe')
+    if training_args.model_type == "donut_only":
+        tokenizer = image_processor.tokenizer
+    else:
+        tokenizer = WhisperTokenizer.from_pretrained(training_args.whisper_path, multilingual=False, language="en", task='transcribe')
 
     if not training_args.do_test:
         train_dataset = VistextDataset(training_args.train_data, image_processor, wav_processor)

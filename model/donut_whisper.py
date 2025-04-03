@@ -3,9 +3,7 @@ import torch
 from typing import Optional, Tuple, Union
 import torch.nn as nn
 import torch.nn.functional as F
-# from model.modeling_whisper import WhisperModel
 import copy
-from transformers import VisionEncoderDecoderModel
 from transformers.modeling_utils import PreTrainedModel
 from transformers import PretrainedConfig
 from transformers.utils import ModelOutput
