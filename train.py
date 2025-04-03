@@ -17,7 +17,7 @@ import random
 import torch.distributed as dist
 
 from transformers import GenerationConfig
-from model.donut_whisper import DonutWhisper
+from model import DonutWhisper, DonutWhisperAttn, WhisperOnly
 from dataset.vistext_dataset import VistextDataset, VistextDataCollator
 from train.vistext_trainer import VistextTrainer
 
@@ -30,6 +30,8 @@ class TrainingArguments(transformers.TrainingArguments):
     test_data: str = None
     do_test: bool = False
     ckpt: str = None
+    model_type: str = "donut_whisper_attn"
+    train_encoder: bool = False
 
 def compute_metrics(eval_pred):
     predictions, labels = eval_pred
@@ -53,7 +55,15 @@ def train():
     torch.cuda.manual_seed_all(seed)
 
     whisper_model = WhisperModel.from_pretrained(training_args.whisper_path)
-    model = DonutWhisper(whisper_model=whisper_model, image_model_path=training_args.image_model_path).to(torch.float16)
+
+    if training_args.model_type == "donut_whisper":
+        model = DonutWhisper(whisper_model=whisper_model, image_model_path=training_args.image_model_path).to(torch.float16)
+    elif training_args.model_type == "donut_whisper_attn":
+        model = DonutWhisperAttn(whisper_model=whisper_model, image_model_path=training_args.image_model_path).to(torch.float16)
+    elif training_args.model_type == "whisper_only":
+        model = WhisperOnly(whisper_model=whisper_model).to(torch.float16)
+    else:
+        raise NotImplementedError
 
     image_processor = DonutProcessor.from_pretrained(training_args.image_model_path)
     wav_processor = WhisperFeatureExtractor.from_pretrained(training_args.whisper_path)
@@ -71,8 +81,11 @@ def train():
             # optimizer = torch.optim.AdamW(model.parameters(), lr=training_args.learning_rate)
             # trainer = VistextTrainer(model=model, args=training_args, train_dataset=train_dataset, eval_dataset=eval_dataset, data_collator=collate_fn, compute_metrics=compute_metrics, optimizers=(optimizer, None))
 
+        train_lst = ['mix_linear', 'image_linear', 'decoder', "qformer"]
+        if training_args.train_encoder:
+            train_lst.append("encoder")
         for name, param in model.named_parameters():
-            if  'mix_linear' in name or 'image_linear' in name or 'decoder' in name:
+            if any([it in name for it in train_lst]):
                 param.requires_grad = True
             else:
                 param.requires_grad = False
@@ -88,7 +101,7 @@ def train():
             print(temp_cnt, temp_total)
 
         trainer.train()
-        trainer.save_model("final_model")
+        # trainer.save_model("final_model")
 
     else:
         ckpt = torch.load(training_args.ckpt)
@@ -110,10 +123,10 @@ def train():
                 item["pred"] = tokenizer.decode(item["pred"])
 
         if dist.get_rank() == 0:
-            os.makedirs(os.path.join(training_args.output_dir, "test"), exist_ok=True)
+            os.makedirs(training_args.output_dir, exist_ok=True)
 
         dist.barrier()
-        with open(os.path.join(training_args.output_dir, "test", f"results_{dist.get_rank()}.json"), 'w') as fp:
+        with open(os.path.join(training_args.output_dir, f"results_{dist.get_rank()}.json"), 'w') as fp:
             json.dump(outputs, fp)
 
         dist.barrier()
@@ -122,12 +135,20 @@ def train():
             res = []
             print("Start Merging")
             for i in range(dist.get_world_size()):
-                with open(os.path.join(training_args.output_dir, "test", f"results_{i}.json"), 'r') as fp:
+                with open(os.path.join(training_args.output_dir, f"results_{i}.json"), 'r') as fp:
                     data_i = json.load(fp)
                 res += data_i
-            with open(os.path.join(training_args.output_dir, "test", f"results_final.json"), 'w') as fp:
-                json.dump(res, fp, indent=4)
-            print(os.path.join(training_args.output_dir, "test", f"results_final.json"))
+
+            map_dic = {}
+            new_res = []
+            for item in res:
+                if item["id"] not in map_dic:
+                    map_dic[item["id"]] = 1
+                    new_res.append(item)
+
+            with open(os.path.join(training_args.output_dir, f"results_final.json"), 'w') as fp:
+                json.dump(new_res, fp, indent=4)
+            print(os.path.join(training_args.output_dir, f"results_final.json"))
 
         dist.barrier()
 

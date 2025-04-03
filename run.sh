@@ -13,18 +13,21 @@ IMAGE_MODEL_PATH=/mnt/bn/tiktok-mm-4/aiic/public/model/donut-base-finetuned-cord
 TRAIN_DATA=/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/Donut_Whisper/jsons/how2_train_cut.json
 EVAL_DATA=/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/Donut_Whisper/jsons/how2_val_cut.json
 
-EPOCHS=10
+EPOCHS=20
 TRAIN_BS=32
 EVAL_BS=8
 LR=1e-4
 SEED=2025
 
-SAVE_STEPS=1000
-OUTPUT_NAME=output/debug
+SAVE_STEPS=500
+OUTPUT_NAME=debug
 
 TEST_DATA=/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/Donut_Whisper/jsons/how2_val_cut.json
 DO_TEST=False
 CKPT=None
+
+MODEL_TYPE=donut_whisper
+TRAIN_ENCODER=False
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -42,12 +45,13 @@ while [[ "$#" -gt 0 ]]; do
         --test_data) TEST_DATA="$2"; shift ;;
         --do_test) DO_TEST=True; ;;
         --ckpt) CKPT="$2"; shift ;;
+        --model_type) MODEL_TYPE="$2"; shift ;;
+        --train_encoder) TRAIN_ENCODER="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
 done
 
-OUTPUT_DIR=output/$OUTPUT_NAME
 export HF_HOME="/mnt/bn/tiktok-mm-2/aiic/public/model/huggingface"
 # if [ -e "/mnt/bn/tiktok-mm-2/aiic/public/model/huggingface" ]; then
 #     export HF_HOME="/mnt/bn/tiktok-mm-2/aiic/public/model/huggingface"
@@ -55,15 +59,17 @@ export HF_HOME="/mnt/bn/tiktok-mm-2/aiic/public/model/huggingface"
 #     hdfs dfs get hdfs://harunava/home/byte_data_seed_azureb_tteng/user/tangchangli/huggingface /home/tiger/.cache/
 # fi
 
+if [ "$DO_TEST" = "True" ]; then
+    DEEPSPEED=None
+    OUTPUT_DIR=output/test/$OUTPUT_NAME
+else
+    DEEPSPEED=scripts/zero0.json
+    OUTPUT_DIR=output/$OUTPUT_NAME
+fi
+
 export WANDB_PROJECT=asr_ocr_whisper
 export WANDB_NAME=$OUTPUT_DIR
 wandb online
-
-if [ "$DO_TEST" = "True" ]; then
-    DEEPSPEED=None
-else
-    DEEPSPEED=scripts/zero0.json
-fi
 
 DEEPSPEED_ARGS=""
 [ "$DEEPSPEED" != "None" ] && DEEPSPEED_ARGS="--deepspeed $DEEPSPEED"
@@ -72,6 +78,7 @@ DEEPSPEED_ARGS=""
 torchrun --nproc_per_node=${ARNOLD_WORKER_GPU} --nnodes="${ARNOLD_WORKER_NUM}" --node_rank="${ARNOLD_ID}" --master_addr="${METIS_WORKER_0_HOST}" --master_port=12396 \
     train.py \
         $DEEPSPEED_ARGS \
+        --model_type $MODEL_TYPE \
         --whisper_path $WHISPER_PATH \
         --image_model_path $IMAGE_MODEL_PATH \
         --train_data $TRAIN_DATA \
@@ -95,4 +102,5 @@ torchrun --nproc_per_node=${ARNOLD_WORKER_GPU} --nnodes="${ARNOLD_WORKER_NUM}" -
         --fp16 True \
         --test_data $TEST_DATA \
         --do_test $DO_TEST \
-        --ckpt $CKPT
+        --ckpt $CKPT \
+        --train_encoder $TRAIN_ENCODER

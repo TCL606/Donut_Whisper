@@ -16,15 +16,17 @@ class VistextTrainer(Trainer):
         else:
             labels = None
         
-        logits= model(**inputs).logits
-        logits = logits[:, :-1, :] # <|startoftranscript|><|en|><|transcribe|><|notimestamps|>
+        outputs = model(**inputs)
+        if "loss" not in outputs:
+            logits = outputs.logits
+            logits = logits[:, :-1, :] # <|startoftranscript|><|en|><|transcribe|><|notimestamps|>
 
-        targets = inputs["labels"]
-        targets = targets[:, 1:]
+            targets = inputs["labels"]
+            targets = targets[:, 1:]
 
-        criterion = nn.CrossEntropyLoss(ignore_index=-100)
-        loss = criterion(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
-        outputs = {"loss": loss, "logits": logits}
+            criterion = nn.CrossEntropyLoss(ignore_index=-100)
+            loss = criterion(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
+            outputs = {"loss": loss, "logits": logits}
 
         # Save past state if it exists
         # TODO: this needs to be fixed and made cleaner later.
@@ -59,10 +61,10 @@ class VistextTrainer(Trainer):
         prediction_loss_only: bool,
         ignore_keys = None,
     ):
-        logits, _ = self.model(**inputs)
-        logits = logits[:, 3:-1, :] # <|startoftranscript|><|en|><|transcribe|><|notimestamps|>
+        logits = self.model(**inputs).logits
+        logits = logits[:, :-1, :] # <|startoftranscript|><|en|><|transcribe|><|notimestamps|>
         labels = inputs["labels"]
-        labels = labels[:, 4:]
+        labels = labels[:, 1:]
         if prediction_loss_only:
             loss = nn.CrossEntropyLoss(ignore_index=-100)(logits.reshape(-1, logits.size(-1)), labels.reshape(-1))
             return loss, logits, labels
@@ -84,12 +86,10 @@ class VistextTrainer(Trainer):
                 audios = inputs.pop('audios')
                 texts = inputs.pop('texts')
                 data_ids = inputs.pop('data_ids')
+                # inputs.pop("images")
                 inputs["input_ids"] = labels[:, :4]
 
-                try:
-                    output = self.model.generate(generation_config=generation_config, **inputs).cpu()
-                except:
-                    output = [None] * len(data_ids[i])
+                output = self.model.generate(generation_config=generation_config, **inputs).cpu()
                 for i in range(len(data_ids)):
                     results.append({
                         "id": data_ids[i],
@@ -102,12 +102,10 @@ class VistextTrainer(Trainer):
                 audios = inputs.pop('audios')
                 texts = inputs.pop('texts')
                 data_ids = inputs.pop('data_ids')
+                # inputs.pop("images")
                 inputs["input_ids"] = labels[:, :4]
 
-                try:
-                    output = self.model.generate(generation_config=generation_config, **inputs).cpu()
-                except:
-                    output = [None] * len(data_ids[i])
+                output = self.model.generate(generation_config=generation_config, **inputs).cpu()
 
                 for i in range(len(data_ids)):
                     results.append({
