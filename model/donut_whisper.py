@@ -4,9 +4,11 @@ from typing import Optional, Tuple, Union
 import torch.nn as nn
 import torch.nn.functional as F
 import copy
+import torch.distributed as dist
 from transformers.modeling_utils import PreTrainedModel
 from transformers import PretrainedConfig
 from transformers.utils import ModelOutput
+from transformers import VisionEncoderDecoderModel
 
 class DonutWhisperConfig(PretrainedConfig):
     def __init__(self, **kwargs):
@@ -26,17 +28,22 @@ class DonutWhisper(PreTrainedModel):
         self.image_linear = nn.Linear(donut_model.config.encoder.hidden_size, whisper_model.config.d_model)
         self.mix_linear = nn.Linear(whisper_model.config.d_model, whisper_model.config.d_model)
 
-    def forward(self, input_ids=None, spectrograms=None, images=None, labels=None, **kwargs):
+    def forward(self, input_ids=None, spectrograms=None, images=None, labels=None, images_len=None, **kwargs):
+        image_feat = self.image_encoder(pixel_values=images).last_hidden_state
+        image_feat = F.gelu(self.image_linear(image_feat))
 
-        if isinstance(images, list):
-            raise NotImplementedError
-        else:
-            image_feat = self.image_encoder(pixel_values=images).last_hidden_state
-            image_feat = F.gelu(self.image_linear(image_feat))
+        video_feats = torch.split(image_feat, images_len, dim=0)
+        # print(f"RANK {dist.get_rank()}: {images_len}")
+        
+        nt_list = [ni * video_feat.shape[1] for ni, video_feat in zip(images_len, video_feats)]
+        max_nt = max(nt_list)
+
+        flatten_feats = [vf.view(-1, image_feat.shape[2]) for vf in video_feats]
+        padded_feats = nn.utils.rnn.pad_sequence(flatten_feats, batch_first=True, padding_value=0)
 
         audio_feat = self.audio_encoder(spectrograms).last_hidden_state
 
-        encoder_output = torch.cat((audio_feat, image_feat), dim=1)
+        encoder_output = torch.cat((audio_feat, padded_feats), dim=1)
         encoder_output = F.gelu(self.mix_linear(encoder_output))
 
         if labels is not None:
@@ -57,6 +64,7 @@ class DonutWhisper(PreTrainedModel):
             "audios": kwargs.get("audios"),
             "spectrograms": kwargs.get("spectrograms"),
             "images": kwargs.get("images"),
+            "images_len": kwargs.get("images_len")
         }
 
 if __name__ == "__main__":
@@ -86,21 +94,26 @@ if __name__ == "__main__":
     wav_processor = WhisperFeatureExtractor.from_pretrained(whisper_path)
     image_processor = DonutProcessor.from_pretrained(image_model_path)
     
-    dataset = VistextDataset("/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/Donut_Whisper/jsons/test.json", image_processor, wav_processor)
+    dataset = VistextDataset("/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/Donut_Whisper/jsons/LS960_train.json", image_processor, wav_processor)
     collate_fn = VistextDataCollator(tokenizer)
 
-    batch = collate_fn([dataset[0]])
-    labels = batch.pop("labels")
-    audios = batch.pop('audios')
-    texts = batch.pop('texts')
-    data_ids = batch.pop('data_ids')
-    batch["input_ids"] = labels[:, :4]
+    batch = collate_fn([dataset[0], dataset[2], dataset[142]])
+    
+    # labels = batch.pop("labels")
+    # audios = batch.pop('audios')
+    # texts = batch.pop('texts')
+    # data_ids = batch.pop('data_ids')
+    # batch["input_ids"] = labels[:, :4]
 
     model = model.cuda()
     batch['spectrograms'] = batch['spectrograms'].cuda()
     batch['images'] = batch['images'].cuda()
-    batch["input_ids"] = batch["input_ids"].cuda()
-    
+    batch["labels"] = batch["labels"].cuda()
+    # batch["input_ids"] = batch["input_ids"].cuda()
+
+    model(**batch)
+    breakpoint()
+
     generation_config = GenerationConfig(max_new_tokens=128, do_sample=False, num_return_sequences=1, eos_token_id=tokenizer.eos_token_id, pad_token_id=tokenizer.pad_token_id)
     
     output = model.generate(generation_config=generation_config, **batch)

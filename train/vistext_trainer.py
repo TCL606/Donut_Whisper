@@ -5,10 +5,46 @@ from typing import Dict
 import torch.nn as nn
 import os
 import torch
+from torch.utils.data import Dataset, Sampler, RandomSampler
+from transformers.trainer_pt_utils import get_length_grouped_indices
+
+class LengthGroupedSampler(Sampler):
+    r"""
+    Sampler that samples indices in a way that groups together features of the dataset of roughly the same length while
+    keeping a bit of randomness.
+    """
+
+    def __init__(
+        self,
+        batch_size: int,
+        world_size: int,
+        lengths=None,
+    ):
+        if lengths is None:
+            raise ValueError("Lengths must be provided.")
+
+        self.batch_size = batch_size
+        self.world_size = world_size
+        self.lengths = lengths
+
+    def __len__(self):
+        return len(self.lengths)
+
+    def __iter__(self):
+        indices = get_length_grouped_indices(self.lengths, self.batch_size, self.world_size)
+        return iter(indices)
 
 class VistextTrainer(Trainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    def _get_train_sampler(self):
+        lengths = self.train_dataset.lengths
+        return LengthGroupedSampler(
+            self.args.train_batch_size,
+            world_size=self.args.world_size * self.args.gradient_accumulation_steps,
+            lengths=lengths,
+        )
     
     def compute_loss(self, model, inputs, return_outputs=False):
         if self.label_smoother is not None and "labels" in inputs:
@@ -87,9 +123,9 @@ class VistextTrainer(Trainer):
                 texts = inputs.pop('texts')
                 data_ids = inputs.pop('data_ids')
                 # inputs.pop("images")
-                # inputs.pop("spectrograms")
-                # inputs["input_ids"] = labels[:, :1]
-                inputs["input_ids"] = labels[:, :4]
+                inputs.pop("spectrograms")
+                inputs["input_ids"] = labels[:, :1]
+                # inputs["input_ids"] = labels[:, :4]
 
                 output = self.model.generate(generation_config=generation_config, **inputs).cpu()
                 for i in range(len(data_ids)):
@@ -105,9 +141,9 @@ class VistextTrainer(Trainer):
                 texts = inputs.pop('texts')
                 data_ids = inputs.pop('data_ids')
                 # inputs.pop("images")
-                # inputs.pop("spectrograms")
-                # inputs["input_ids"] = labels[:, :1]
-                inputs["input_ids"] = labels[:, :4]
+                inputs.pop("spectrograms")
+                inputs["input_ids"] = labels[:, :1]
+                # inputs["input_ids"] = labels[:, :4]
 
                 output = self.model.generate(generation_config=generation_config, **inputs).cpu()
 

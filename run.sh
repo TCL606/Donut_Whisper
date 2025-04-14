@@ -29,6 +29,8 @@ CKPT=None
 MODEL_TYPE=donut_whisper
 TRAIN_ENCODER=False
 
+EVAL_ACCUMULATION_STEPS=-1
+
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --whisper_path) WHISPER_PATH="$2"; shift ;;
@@ -47,6 +49,7 @@ while [[ "$#" -gt 0 ]]; do
         --ckpt) CKPT="$2"; shift ;;
         --model_type) MODEL_TYPE="$2"; shift ;;
         --train_encoder) TRAIN_ENCODER="$2"; shift ;;
+        --eval_accumulation_steps) EVAL_ACCUMULATION_STEPS="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -74,10 +77,16 @@ wandb online
 DEEPSPEED_ARGS=""
 [ "$DEEPSPEED" != "None" ] && DEEPSPEED_ARGS="--deepspeed $DEEPSPEED"
 
+EVAL_ACCUMULATION_STEPS_ARGS=""
+if [ "$EVAL_ACCUMULATION_STEPS" -ge 0 ]; then
+    EVAL_ACCUMULATION_STEPS_ARGS="--eval_accumulation_steps $EVAL_ACCUMULATION_STEPS"
+fi
+
 # ${ARNOLD_WORKER_GPU}
 torchrun --nproc_per_node=${ARNOLD_WORKER_GPU} --nnodes="${ARNOLD_WORKER_NUM}" --node_rank="${ARNOLD_ID}" --master_addr="${METIS_WORKER_0_HOST}" --master_port=12396 \
     train.py \
         $DEEPSPEED_ARGS \
+        $EVAL_ACCUMULATION_STEPS_ARGS \
         --model_type $MODEL_TYPE \
         --whisper_path $WHISPER_PATH \
         --image_model_path $IMAGE_MODEL_PATH \
@@ -103,4 +112,4 @@ torchrun --nproc_per_node=${ARNOLD_WORKER_GPU} --nnodes="${ARNOLD_WORKER_NUM}" -
         --test_data $TEST_DATA \
         --do_test $DO_TEST \
         --ckpt $CKPT \
-        --train_encoder $TRAIN_ENCODER
+        --train_encoder $TRAIN_ENCODER;

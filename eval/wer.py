@@ -85,9 +85,11 @@ class WER(evaluate.Metric):
             ins = 0
             for prediction, reference in zip(predictions, references):
                 measures = compute_measures(reference, prediction)
-                # if (measures["substitutions"] + measures["deletions"] + measures["insertions"]) / (measures["substitutions"] + measures["deletions"] + measures["hits"]) > 0.2:
-                #     print(prediction)
-                #     print(reference)
+                # if (tmp_wer := (measures["substitutions"] + measures["deletions"] + measures["insertions"]) / (measures["substitutions"] + measures["deletions"] + measures["hits"])) > 0.2:
+                #     print("Pred: ", prediction)
+                #     print("Ref: ", reference)
+                #     print(f"WER: {tmp_wer}")
+                #     breakpoint()
 
                 subs += measures["substitutions"]
                 dels += measures["deletions"]
