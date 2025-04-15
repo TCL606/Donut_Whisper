@@ -17,6 +17,8 @@ class WhisperOnly(PreTrainedModel):
     def __init__(self, whisper_model):
         config = WhisperOnlyConfig()
         super().__init__(config)
+        self.model_type = "whisper_only"
+
         self.encoder = whisper_model.encoder
         self.decoder = whisper_model.decoder
 

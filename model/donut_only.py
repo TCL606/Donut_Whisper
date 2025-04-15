@@ -18,6 +18,7 @@ class DonutOnly(PreTrainedModel):
     def __init__(self, image_model_path):
         config = DonutOnlyConfig()
         super().__init__(config)
+        self.model_type = "donut_only"
 
         # self.donut_model = VisionEncoderDecoderModel.from_pretrained(image_model_path)
         donut_model = VisionEncoderDecoderModel.from_pretrained(image_model_path)

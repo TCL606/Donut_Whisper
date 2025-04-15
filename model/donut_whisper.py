@@ -18,6 +18,7 @@ class DonutWhisper(PreTrainedModel):
     def __init__(self, whisper_model, image_model_path):
         config = DonutWhisperConfig()
         super().__init__(config)
+        self.model_type = "donut_whisper"
 
         donut_model = VisionEncoderDecoderModel.from_pretrained(image_model_path)
 
@@ -40,7 +41,7 @@ class DonutWhisper(PreTrainedModel):
 
         flatten_feats = [vf.view(-1, image_feat.shape[2]) for vf in video_feats]
         padded_feats = nn.utils.rnn.pad_sequence(flatten_feats, batch_first=True, padding_value=0)
-
+        
         audio_feat = self.audio_encoder(spectrograms).last_hidden_state
 
         encoder_output = torch.cat((audio_feat, padded_feats), dim=1)
@@ -61,7 +62,6 @@ class DonutWhisper(PreTrainedModel):
     def prepare_inputs_for_generation(self, input_ids, **kwargs):
         return {
             "input_ids": input_ids,
-            "audios": kwargs.get("audios"),
             "spectrograms": kwargs.get("spectrograms"),
             "images": kwargs.get("images"),
             "images_len": kwargs.get("images_len")
