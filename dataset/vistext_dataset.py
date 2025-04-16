@@ -96,41 +96,44 @@ class VistextDataset(Dataset):
                         break
                     vr = VideoReader(io.BytesIO(video_data), ctx=cpu(i % 8), num_threads=1)
 
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                font_scale = 0.8
-                thickness = 2
-                width = vr[0].shape[1]
+                if "image_cnt" in source:
+                    num_images = source["image_cnt"]
+                else:
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    font_scale = 0.8
+                    thickness = 2
+                    width = vr[0].shape[1]
 
-                flag = False
-                for _ in range(2):
-                    words = text.split()
-                    lines = []
-                    current_line = ""
-                    for word in words:
-                        test_text = current_line + " " + word if current_line else word
-                        text_size, _ = cv2.getTextSize(test_text, font, font_scale, thickness)
-                        text_width = text_size[0]
-                        if text_width <= width:
-                            current_line = test_text
+                    flag = False
+                    for _ in range(2):
+                        words = text.split()
+                        lines = []
+                        current_line = ""
+                        for word in words:
+                            test_text = current_line + " " + word if current_line else word
+                            text_size, _ = cv2.getTextSize(test_text, font, font_scale, thickness)
+                            text_width = text_size[0]
+                            if text_width <= width:
+                                current_line = test_text
+                            else:
+                                if current_line:
+                                    lines.append(current_line)
+                                current_line = word
+                        if current_line:
+                            lines.append(current_line)
+                        num_images = len(lines)
+                        if num_images > 20:
+                            font_scale = 0.5
+                            thickness = 1
                         else:
-                            if current_line:
-                                lines.append(current_line)
-                            current_line = word
-                    if current_line:
-                        lines.append(current_line)
-                    num_images = len(lines)
-                    if num_images > 20:
-                        font_scale = 0.5
-                        thickness = 1
-                    else:
-                        flag = True
-                        break   
-                
-                try:
-                    assert flag                     
-                except Exception as e:
-                    print(f"GGG: Num Images: {num_images}, Text: {text}")
-                    raise e
+                            flag = True
+                            break   
+                    
+                    try:
+                        assert flag                     
+                    except Exception as e:
+                        print(f"GGG: Num Images: {num_images}, Text: {text}")
+                        raise e
 
                 if "timestamps" in source:
                     start, end = source["timestamps"]
@@ -153,36 +156,41 @@ class VistextDataset(Dataset):
                     data_id = "['{}', '{}', '{}']".format(audio_file, video_file, None)
 
                 images_with_text = []
-                for i in range(num_images):
-                    new_image = images[i]
-                    new_image = new_image / 255 * 2 - 1
+                if "image_cnt" not in source:
+                    for i in range(num_images):
+                        new_image = images[i]
+                        new_image = new_image / 255 * 2 - 1
 
-                    current_text = lines[i]
+                        current_text = lines[i]
 
-                    text_size, baseline = cv2.getTextSize(current_text, font, font_scale, thickness)
-                    text_width = text_size[0]
-                    text_height = text_size[1]
-                    text_x = int((width - text_width) / 2)
-                    text_y = new_image.shape[0] - 30
+                        text_size, baseline = cv2.getTextSize(current_text, font, font_scale, thickness)
+                        text_width = text_size[0]
+                        text_height = text_size[1]
+                        text_x = int((width - text_width) / 2)
+                        text_y = new_image.shape[0] - 30
 
-                    padding = 5
-                    x1 = max(text_x - padding, 0)
-                    y1 = text_y + baseline - text_height - 2 * padding
-                    x2 = min(text_x + text_width + padding, width)
-                    y2 = text_y + baseline
+                        padding = 5
+                        x1 = max(text_x - padding, 0)
+                        y1 = text_y + baseline - text_height - 2 * padding
+                        x2 = min(text_x + text_width + padding, width)
+                        y2 = text_y + baseline
 
-                    new_image[y1:y2, x1:x2] = -1.0
+                        new_image[y1:y2, x1:x2] = -1.0
 
-                    cv2.putText(new_image, current_text, (text_x, text_y), font, font_scale, (1, 1, 1), thickness)
+                        cv2.putText(new_image, current_text, (text_x, text_y), font, font_scale, (1, 1, 1), thickness)
 
-                    new_image = (new_image + 1) / 2 * 255
-                    new_image = new_image.astype(np.uint8)
-                    images_with_text.append(new_image)
+                        new_image = (new_image + 1) / 2 * 255
+                        new_image = new_image.astype(np.uint8)
+                        images_with_text.append(new_image)
 
-                    # from PIL import Image
-                    # image = Image.fromarray(new_image)
-                    # image.save("/opt/tiger/tmp.png")
-                    # breakpoint()
+                        # from PIL import Image
+                        # image = Image.fromarray(new_image)
+                        # image.save("/opt/tiger/tmp.png")
+                        # breakpoint()
+                else:
+                    for i in range(num_images):
+                        new_image = images[i]
+                        images_with_text.append(new_image)
 
                 images = []
                 for img in images_with_text:

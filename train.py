@@ -66,7 +66,16 @@ def train():
         model = DonutOnly(image_model_path=training_args.image_model_path).to(torch.float16)
     else:
         raise NotImplementedError
+    
+    if training_args.ckpt is not None and training_args.ckpt != "None":
+        print(f"Load ckpt: {training_args.ckpt}")
+        ckpt = torch.load(training_args.ckpt)
+        new_ckpt = OrderedDict()
+        for k in ckpt.keys():
+            new_ckpt[k[len('module.'):]] = ckpt[k]
 
+        kk = model.load_state_dict(new_ckpt, strict=False)
+        print(len(kk.unexpected_keys), len(kk.missing_keys))
 
     image_processor = DonutProcessor.from_pretrained(training_args.image_model_path)
     wav_processor = WhisperFeatureExtractor.from_pretrained(training_args.whisper_path)
@@ -110,14 +119,6 @@ def train():
         # trainer.save_model("final_model")
 
     else:
-        ckpt = torch.load(training_args.ckpt)
-        new_ckpt = OrderedDict()
-        for k in ckpt.keys():
-            new_ckpt[k[len('module.'):]] = ckpt[k]
-
-        kk = model.load_state_dict(new_ckpt, strict=False)
-        print(len(kk.unexpected_keys), len(kk.missing_keys))
-
         test_dataset = VistextDataset(training_args.test_data, image_processor, wav_processor)
         collate_fn = VistextDataCollator(tokenizer)
         trainer = VistextTrainer(model=model, args=training_args, train_dataset=test_dataset, eval_dataset=test_dataset, data_collator=collate_fn, compute_metrics=compute_metrics)

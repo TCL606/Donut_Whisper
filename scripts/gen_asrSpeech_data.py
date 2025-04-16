@@ -5,9 +5,11 @@ json_file_lst = [
 #     "/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/preprocess_dataset/librispeech_asr_train-clean-100.json",
 #     "/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/preprocess_dataset/librispeech_asr_train-clean-360.json",
 #     "/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/preprocess_dataset/librispeech_asr_train-other-500.json",
-    "/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/preprocess_dataset/m3av_asr_test.json",
+    # "/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/preprocess_dataset/m3av_asr_test.json",
+    "/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/preprocess_dataset/librispeech_asr_test-clean.json",
 ]
-output_json = "/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/Donut_Whisper/jsons/m3av_asr_test.json"
+
+output_json = "/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/Donut_Whisper/jsons/LS_test_clean.json"
 
 data = []
 for json_file in json_file_lst:
@@ -23,7 +25,7 @@ for item in data:
     #     continue
 
     res.append({
-        "video": item["video"],
+        # "video": item["video"],
         "audio": item["audio"],
         "text": item["conversations"][1]["value"],
     })

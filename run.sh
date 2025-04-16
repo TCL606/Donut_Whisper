@@ -22,7 +22,7 @@ SEED=2025
 SAVE_STEPS=500
 OUTPUT_NAME=debug
 
-TEST_DATA=/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/Donut_Whisper/jsons/how2_val_cut.json
+TEST_DATA=/mnt/bn/tiktok-mm-4/aiic/users/tangchangli/Donut_Whisper/jsons/how2_val.json
 DO_TEST=False
 CKPT=None
 
